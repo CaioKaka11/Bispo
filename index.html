@@ -1,0 +1,649 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Calculadora de Rotas iFood</title>
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #0a0e14;
+            --surface: rgba(18, 22, 30, 0.85);
+            --border: rgba(255, 255, 255, 0.08);
+            --text: #e0e0e0;
+            --text-secondary: #94a3b8;
+            --accent: #ff3b3b;
+            --accent-glow: rgba(255, 59, 59, 0.4);
+            --success: #10b981;
+            --warning: #f59e0b;
+            --glass: rgba(255, 255, 255, 0.04);
+            --card-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+            --radius: 20px;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', system-ui, sans-serif;
+            background: radial-gradient(ellipse at top, #1a1e2b 0%, #0a0e14 70%);
+            min-height: 100vh;
+            color: var(--text);
+            display: flex;
+            justify-content: center;
+            padding: 24px 16px;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 960px;
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+        }
+
+        /* HEADER */
+        .header {
+            text-align: center;
+            backdrop-filter: blur(16px);
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 28px 24px 20px;
+            box-shadow: var(--card-shadow);
+        }
+        .header h1 {
+            font-size: 2rem;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+            background: linear-gradient(135deg, #ff5e5e, #ff3b3b);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 6px;
+        }
+        .header p {
+            color: var(--text-secondary);
+            font-size: 0.95rem;
+        }
+        .tax-badge {
+            display: inline-flex;
+            gap: 16px;
+            margin-top: 12px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+        .tax-badge span {
+            background: var(--glass);
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 500;
+            border: 1px solid var(--border);
+            color: #cbd5e1;
+        }
+
+        /* UPLOAD AREA */
+        .upload-card {
+            backdrop-filter: blur(16px);
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 32px 24px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.25s;
+            box-shadow: var(--card-shadow);
+        }
+        .upload-card:hover {
+            border-color: rgba(255, 59, 59, 0.5);
+            background: rgba(255, 59, 59, 0.03);
+        }
+        .upload-card.dragover {
+            border-color: var(--accent);
+            background: rgba(255, 59, 59, 0.08);
+            transform: scale(1.01);
+        }
+        .upload-card img {
+            max-height: 220px;
+            margin: 0 auto 16px;
+            display: none;
+            border-radius: 14px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+        }
+        .upload-icon {
+            font-size: 3rem;
+            margin-bottom: 12px;
+        }
+        .upload-text {
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+        #fileInput {
+            display: none;
+        }
+
+        /* BUTTONS */
+        .btn {
+            border: none;
+            padding: 12px 24px;
+            border-radius: 14px;
+            font-weight: 600;
+            font-size: 0.95rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            letter-spacing: 0.2px;
+        }
+        .btn-primary {
+            background: var(--accent);
+            color: white;
+            box-shadow: 0 6px 20px var(--accent-glow);
+        }
+        .btn-primary:hover:not(:disabled) {
+            background: #e03535;
+            box-shadow: 0 8px 28px var(--accent-glow);
+            transform: translateY(-1px);
+        }
+        .btn-primary:disabled {
+            background: #555;
+            box-shadow: none;
+            color: #999;
+            cursor: not-allowed;
+        }
+        .btn-outline {
+            background: transparent;
+            border: 1px solid rgba(255,255,255,0.2);
+            color: #ccc;
+        }
+        .btn-outline:hover {
+            background: rgba(255,255,255,0.05);
+            border-color: var(--accent);
+            color: white;
+        }
+        .btn-success {
+            background: var(--success);
+            color: white;
+        }
+        .btn-sm {
+            padding: 6px 14px;
+            font-size: 0.8rem;
+            border-radius: 10px;
+        }
+
+        /* RESULT CARD */
+        .result-card {
+            backdrop-filter: blur(20px);
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 24px;
+            display: none;
+            box-shadow: var(--card-shadow);
+            animation: fadeSlide 0.3s ease;
+        }
+        @keyframes fadeSlide {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .form-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 16px;
+            margin-bottom: 16px;
+        }
+        .form-group label {
+            display: block;
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+            margin-bottom: 6px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .form-group input, .form-group select {
+            width: 100%;
+            padding: 12px;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            color: white;
+            font-size: 0.95rem;
+            outline: none;
+            transition: border 0.2s;
+        }
+        .form-group input:focus, .form-group select:focus {
+            border-color: var(--accent);
+        }
+        .form-group input[readonly] {
+            background: rgba(255,255,255,0.02);
+            color: #aaa;
+        }
+        .troco-panel {
+            margin-top: 12px;
+            padding: 14px;
+            background: rgba(245, 158, 11, 0.1);
+            border: 1px solid rgba(245, 158, 11, 0.3);
+            border-radius: 12px;
+            display: none;
+        }
+        .troco-panel strong {
+            color: var(--warning);
+        }
+        .troco-field {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-top: 8px;
+        }
+        .troco-field input {
+            width: 140px;
+            padding: 10px;
+            background: rgba(0,0,0,0.3);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            color: white;
+        }
+
+        /* TABLE */
+        .table-wrapper {
+            backdrop-filter: blur(16px);
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            overflow-x: auto;
+            box-shadow: var(--card-shadow);
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.85rem;
+        }
+        th {
+            background: rgba(255,255,255,0.04);
+            color: var(--text-secondary);
+            font-weight: 600;
+            padding: 14px 12px;
+            text-align: left;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-size: 0.75rem;
+        }
+        td {
+            padding: 12px;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+            vertical-align: middle;
+        }
+        .badge {
+            padding: 4px 10px;
+            border-radius: 14px;
+            font-size: 0.7rem;
+            font-weight: 700;
+        }
+        .badge-pendente { background: #fbbf24; color: #1e1e1e; }
+        .badge-entregue { background: #34d399; color: #064e3b; }
+        .badge-cancelado { background: #f87171; color: #450a0a; }
+
+        /* SUMMARY */
+        .summary {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 16px;
+            backdrop-filter: blur(16px);
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 20px 24px;
+            box-shadow: var(--card-shadow);
+            font-weight: 500;
+        }
+        .summary strong {
+            font-size: 1.3rem;
+            background: linear-gradient(135deg, #ff5e5e, #ff3b3b);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .loading-overlay {
+            display: none;
+            text-align: center;
+            padding: 20px;
+            backdrop-filter: blur(12px);
+            background: rgba(0,0,0,0.4);
+            border-radius: 16px;
+            color: white;
+            font-weight: 600;
+            margin: 16px 0;
+        }
+
+        @media (max-width: 600px) {
+            .header h1 { font-size: 1.6rem; }
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="header">
+        <h1>🛵 RotaPay Scanner</h1>
+        <p>Escaneie a comanda do iFood — cálculo automático por bairro</p>
+        <div class="tax-badge">
+            <span>💎 R$7</span><span>🔥 R$9</span><span>⚡ R$13</span><span>🏍️ R$15</span>
+        </div>
+    </div>
+
+    <div class="upload-card" id="dropArea">
+        <div class="upload-icon">📸</div>
+        <img id="previewImage" alt="Prévia da comanda">
+        <p class="upload-text" id="uploadText">Clique ou arraste a foto da comanda aqui</p>
+        <input type="file" id="fileInput" accept="image/*">
+    </div>
+
+    <div style="text-align: center;">
+        <button class="btn btn-primary" id="scanBtn" disabled>🔍 Escanear Comanda</button>
+    </div>
+    <div class="loading-overlay" id="loadingMessage">⏳ Processando imagem com IA...</div>
+
+    <div class="result-card" id="resultCard">
+        <h3 style="margin-bottom:16px; color:white;">📋 Dados extraídos</h3>
+        <div class="form-row">
+            <div class="form-group">
+                <label>Código</label>
+                <input type="text" id="codigo" placeholder="#1234">
+            </div>
+            <div class="form-group">
+                <label>Bairro</label>
+                <input type="text" id="bairro" placeholder="Nome do bairro">
+            </div>
+            <div class="form-group">
+                <label>Taxa (R$)</label>
+                <input type="text" id="taxa" readonly placeholder="Automático">
+            </div>
+        </div>
+        <div class="form-row">
+            <div class="form-group">
+                <label>Valor do Pedido</label>
+                <input type="text" id="valorPedido" placeholder="R$ 45,90">
+            </div>
+            <div class="form-group">
+                <label>Pagamento</label>
+                <select id="tipoPagamento">
+                    <option value="Online">Online (já pago)</option>
+                    <option value="Dinheiro">Dinheiro</option>
+                    <option value="Cartão">Cartão (máquina)</option>
+                    <option value="Pix">Pix na entrega</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Status</label>
+                <select id="statusSelect">
+                    <option value="Pendente">Pendente</option>
+                    <option value="Entregue">Entregue</option>
+                    <option value="Cancelado">Cancelado</option>
+                </select>
+            </div>
+        </div>
+        <div class="troco-panel" id="trocoDiv">
+            <strong>💰 Troco: <span id="trocoValue">-</span></strong>
+            <div class="troco-field">
+                <label style="color:#ccc;">Valor recebido:</label>
+                <input type="number" id="valorRecebido" step="0.01" placeholder="R$ 0,00">
+            </div>
+        </div>
+        <button class="btn btn-success" id="addBtn" style="margin-top:16px; width:100%;">➕ Adicionar à lista</button>
+    </div>
+
+    <div class="summary" id="summary">
+        <span>📦 Entregas válidas: <strong id="totalEntregas">0</strong></span>
+        <span>💵 Total a receber: <strong id="totalTaxas">R$ 0,00</strong></span>
+    </div>
+
+    <div class="table-wrapper">
+        <table id="recordsTable">
+            <thead>
+                <tr>
+                    <th>Código</th><th>Bairro</th><th>Taxa</th><th>Pedido</th><th>Pagamento</th><th>Status</th><th></th>
+                </tr>
+            </thead>
+            <tbody id="tableBody"></tbody>
+        </table>
+        <p id="emptyMessage" style="text-align:center; color:#666; padding:20px;">Nenhum pedido registrado.</p>
+    </div>
+    <button class="btn btn-outline" id="exportBtn">📥 Exportar CSV</button>
+</div>
+
+<script>
+    (() => {
+        // ========== MAPA DE BAIRROS (já completo) ==========
+        const BAIRROS_MAP = new Map([
+            // Taxa 15
+            ['monte serrat', 15], ['uruguai', 15], ['caminho de areia', 15], ['boa viagem', 15],
+            ['nova brasilia', 15], ['nova brasília', 15], ['ribeira', 15], ['vila rui barbosa', 15],
+            ['bonfim', 15], ['mangueira', 15], ['massaranduba', 15], ['roma', 15],
+            // Taxa 13
+            ['centro', 13], ['chame chame', 13], ['machado', 13], ['nazare', 13], ['nazaré', 13],
+            ['novo horizonte', 13], ['ondina', 13], ['barra', 13], ['graça', 13], ['graca', 13],
+            ['jardim apipema', 13], ['politeama', 13], ['pituaçu', 13], ['pituacu', 13],
+            ['piedade', 13], ['piatã', 13], ['piata', 13], ['pelourinho', 13],
+            ['pau da lima', 13], ['patamares', 13], ['paralela', 13], ['comercio', 13], ['comércio', 13],
+            ['mares', 13], ['jaguaribe', 13], ['jardim placaford', 13], ['jardim plataforma', 13],
+            ['alphaville', 13], ['trobogy', 13], ['canabrava', 13], ['vale dos lagos', 13],
+            ['são rafael', 13], ['sao rafael', 13], ['são marcos', 13], ['sao marcos', 13],
+            ['cab', 13], ['jardim nova esperança', 13], ['jardim nova esperanca', 13],
+            ['santo antônio alem do carmo', 13], ['santo antonio alem do carmo', 13],
+            ['barbalho', 13], ['saude', 13], ['saúde', 13], ['barris', 13], ['canela', 13],
+            ['garcia', 13], ['calabar', 13], ['engenho velho de brotas', 13],
+            ['engenho velho da federação', 13], ['engenho velho da federacao', 13],
+            // Taxa 9
+            ['acupe de brotas', 9], ['arenoso', 9], ['boca do rio', 9], ['brotas', 9],
+            ['cabula', 9], ['narandiba', 9], ['saboeiro', 9], ['resgate', 9],
+            ['cabula vi', 9], ['vila laura', 9], ['vasco da gama', 9], ['santo agostinho', 9],
+            ['santa teresa', 9], ['rio vermelho', 9], ['pernambues', 9], ['pernambués', 9],
+            ['parque cruz aguiar', 9], ['matatu', 9], ['campinas de brotas', 9],
+            ['cosme de farias', 9], ['daniel lisboa', 9], ['doron', 9], ['federação', 9],
+            ['federacao', 9], ['horto bela vista', 9], ['horto florestal', 9], ['imbui', 9],
+            ['imbuí', 9], ['jardim brasília', 9], ['jardim brasilia', 9], ['luis anselmo', 9],
+            ['tororo', 9], ['tororó', 9],
+            // Taxa 7
+            ['pituba', 7], ['nordeste', 7], ['stiep', 7], ['santa cruz', 7],
+            ['parque bela vista', 7], ['armação', 7], ['armacao', 7], ['jardim armação', 7],
+            ['jardim armacao', 7], ['jardim de alah', 7], ['itaigara', 7], ['costa azul', 7],
+            ['cidade jardim', 7], ['candeal', 7], ['caminho das arvores', 7], ['caminho das árvores', 7],
+            ['amaralina', 7]
+        ]);
+
+        const REG_KEY = 'rotapay_pedidos';
+        let registros = JSON.parse(localStorage.getItem(REG_KEY) || '[]');
+
+        // DOM
+        const dropArea = document.getElementById('dropArea');
+        const fileInput = document.getElementById('fileInput');
+        const preview = document.getElementById('previewImage');
+        const uploadText = document.getElementById('uploadText');
+        const scanBtn = document.getElementById('scanBtn');
+        const loadingDiv = document.getElementById('loadingMessage');
+        const resultCard = document.getElementById('resultCard');
+        const codigoInp = document.getElementById('codigo');
+        const bairroInp = document.getElementById('bairro');
+        const taxaInp = document.getElementById('taxa');
+        const valorPedidoInp = document.getElementById('valorPedido');
+        const tipoPgtoSel = document.getElementById('tipoPagamento');
+        const statusSel = document.getElementById('statusSelect');
+        const addBtn = document.getElementById('addBtn');
+        const tableBody = document.getElementById('tableBody');
+        const emptyMsg = document.getElementById('emptyMessage');
+        const totalEntregasEl = document.getElementById('totalEntregas');
+        const totalTaxasEl = document.getElementById('totalTaxas');
+        const exportBtn = document.getElementById('exportBtn');
+        const trocoDiv = document.getElementById('trocoDiv');
+        const trocoValue = document.getElementById('trocoValue');
+        const valorRecebidoInp = document.getElementById('valorRecebido');
+
+        let selectedFile = null;
+
+        // UPLOAD
+        dropArea.addEventListener('click', () => fileInput.click());
+        fileInput.addEventListener('change', handleFile);
+        dropArea.addEventListener('dragover', e => { e.preventDefault(); dropArea.classList.add('dragover'); });
+        dropArea.addEventListener('dragleave', () => dropArea.classList.remove('dragover'));
+        dropArea.addEventListener('drop', e => {
+            e.preventDefault();
+            dropArea.classList.remove('dragover');
+            if (e.dataTransfer.files.length) { fileInput.files = e.dataTransfer.files; handleFile(); }
+        });
+
+        function handleFile() {
+            const file = fileInput.files[0];
+            if (file && file.type.startsWith('image/')) {
+                selectedFile = file;
+                const r = new FileReader();
+                r.onload = e => {
+                    preview.src = e.target.result;
+                    preview.style.display = 'block';
+                    uploadText.style.display = 'none';
+                };
+                r.readAsDataURL(file);
+                scanBtn.disabled = false;
+                resultCard.style.display = 'none';
+            }
+        }
+
+        // Atualiza taxa ao digitar bairro
+        bairroInp.addEventListener('input', updateTaxa);
+        tipoPgtoSel.addEventListener('change', toggleTroco);
+        valorRecebidoInp.addEventListener('input', calcTroco);
+        valorPedidoInp.addEventListener('input', () => { if (tipoPgtoSel.value === 'Dinheiro') calcTroco(); });
+
+        function updateTaxa() {
+            const nome = bairroInp.value.trim().toLowerCase();
+            const taxa = BAIRROS_MAP.get(nome);
+            taxaInp.value = taxa ? `R$ ${taxa.toFixed(2).replace('.', ',')}` : '';
+            if (!taxa && nome) taxaInp.value = '❌ Bairro não encontrado';
+        }
+
+        function toggleTroco() {
+            trocoDiv.style.display = tipoPgtoSel.value === 'Dinheiro' ? 'block' : 'none';
+            if (tipoPgtoSel.value !== 'Dinheiro') valorRecebidoInp.value = '';
+        }
+        function calcTroco() {
+            const valor = parseFloat(valorPedidoInp.value.replace(/[^\d,]/g, '').replace(',', '.')) || 0;
+            const recebido = parseFloat(valorRecebidoInp.value) || 0;
+            trocoValue.textContent = recebido > 0 ? `R$ ${Math.max(0, recebido - valor).toFixed(2).replace('.', ',')}` : '-';
+        }
+
+        // OCR
+        scanBtn.addEventListener('click', async () => {
+            if (!selectedFile) return;
+            scanBtn.disabled = true;
+            loadingDiv.style.display = 'block';
+            resultCard.style.display = 'none';
+            try {
+                const { data: { text } } = await Tesseract.recognize(selectedFile, 'por');
+                console.log('OCR:', text);
+                const codigo = (text.match(/#\d{3,}/) || text.match(/(?:pedido|código)\s*[:\s]*(\d{3,})/i) || [''])[0].replace(/pedido\s*:?\s*/i, '');
+                const bairroMatch = text.match(/bairro\s*[:\s]*([^\n]{3,40})/i);
+                const bairro = bairroMatch ? bairroMatch[1].trim() : '';
+                const valorMatch = text.match(/(?:total|valor)\s*[:\s]*R?\$?\s*(\d+[.,]\d{2})/i) || text.match(/R\$\s*(\d+[.,]\d{2})/);
+                const valor = valorMatch ? 'R$ ' + valorMatch[1].replace('.', ',') : '';
+                const lower = text.toLowerCase();
+                let pagamento = 'Online';
+                if (/dinheiro/.test(lower)) pagamento = 'Dinheiro';
+                else if (/cartão|cartao|débito|credito/.test(lower)) pagamento = 'Cartão';
+                else if (/pix/.test(lower)) pagamento = 'Pix';
+
+                codigoInp.value = codigo.replace(/^pedido\s*/i, '').trim();
+                bairroInp.value = bairro;
+                valorPedidoInp.value = valor;
+                tipoPgtoSel.value = pagamento;
+                statusSel.value = 'Pendente';
+                updateTaxa();
+                toggleTroco();
+                resultCard.style.display = 'block';
+            } catch (e) { alert('Erro no OCR: ' + e.message); }
+            finally {
+                scanBtn.disabled = false;
+                loadingDiv.style.display = 'none';
+            }
+        });
+
+        // Adicionar registro
+        addBtn.addEventListener('click', () => {
+            const taxaStr = taxaInp.value.replace(/[^\d,]/g, '').replace(',', '.');
+            const taxa = parseFloat(taxaStr) || 0;
+            registros.push({
+                codigo: codigoInp.value.trim() || '-',
+                bairro: bairroInp.value.trim() || '-',
+                taxa,
+                valorPedido: valorPedidoInp.value.trim(),
+                pagamento: tipoPgtoSel.value,
+                status: statusSel.value,
+            });
+            localStorage.setItem(REG_KEY, JSON.stringify(registros));
+            render();
+            // reset
+            ['codigo','bairro','valorPedido'].forEach(id => document.getElementById(id).value = '');
+            taxaInp.value = '';
+            tipoPgtoSel.value = 'Online';
+            statusSel.value = 'Pendente';
+            trocoDiv.style.display = 'none';
+            valorRecebidoInp.value = '';
+            resultCard.style.display = 'none';
+            preview.style.display = 'none';
+            uploadText.style.display = 'block';
+            fileInput.value = '';
+            selectedFile = null;
+            scanBtn.disabled = true;
+        });
+
+        function render() {
+            tableBody.innerHTML = '';
+            emptyMsg.style.display = registros.length ? 'none' : 'block';
+            let totalTaxas = 0, validas = 0;
+            registros.forEach((r, i) => {
+                if (r.status !== 'Cancelado') { validas++; totalTaxas += r.taxa; }
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${esc(r.codigo)}</td><td>${esc(r.bairro)}</td><td>R$ ${r.taxa.toFixed(2)}</td>
+                    <td>${esc(r.valorPedido)}</td><td>${esc(r.pagamento)}</td>
+                    <td><span class="badge badge-${r.status.toLowerCase()}">${r.status}</span></td>
+                    <td>
+                        <select class="status-inline" data-i="${i}">
+                            <option ${r.status==='Pendente'?'selected':''}>Pendente</option>
+                            <option ${r.status==='Entregue'?'selected':''}>Entregue</option>
+                            <option ${r.status==='Cancelado'?'selected':''}>Cancelado</option>
+                        </select>
+                        <button class="btn btn-sm btn-outline" data-del="${i}">🗑️</button>
+                    </td>`;
+                tableBody.appendChild(tr);
+            });
+            totalEntregasEl.textContent = validas;
+            totalTaxasEl.textContent = `R$ ${totalTaxas.toFixed(2)}`;
+            document.querySelectorAll('.status-inline').forEach(s => s.onchange = function() {
+                registros[this.dataset.i].status = this.value;
+                localStorage.setItem(REG_KEY, JSON.stringify(registros));
+                render();
+            });
+            document.querySelectorAll('[data-del]').forEach(b => b.onclick = () => {
+                if (confirm('Excluir?')) { registros.splice(b.dataset.del,1); localStorage.setItem(REG_KEY, JSON.stringify(registros)); render(); }
+            });
+        }
+
+        function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+        exportBtn.onclick = () => {
+            if (!registros.length) return alert('Nada para exportar.');
+            const csv = 'Código,Bairro,Taxa,Valor,Pagamento,Status\n' + registros.map(r => `"${r.codigo}","${r.bairro}","${r.taxa}","${r.valorPedido}","${r.pagamento}","${r.status}"`).join('\n');
+            const blob = new Blob([csv], {type: 'text/csv'});
+            const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'rotas.csv'; a.click();
+        };
+        render();
+    })();
+</script>
+</body>
+</html>
