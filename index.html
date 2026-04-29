@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>RotaPay Scanner - iFood</title>
-    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
         :root {
@@ -29,9 +28,23 @@
             color: var(--text);
             display: flex;
             justify-content: center;
+            align-items: center;
             padding: 24px 16px;
         }
-        .container { width: 100%; max-width: 960px; display: flex; flex-direction: column; gap: 24px; }
+        .app-container {
+            width: 100%;
+            max-width: 960px;
+            display: none;
+            flex-direction: column;
+            gap: 24px;
+        }
+        .login-container {
+            width: 100%;
+            max-width: 400px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
         .header {
             text-align: center;
             backdrop-filter: blur(16px);
@@ -169,8 +182,19 @@
         .badge-entregue { background: #34d399; color: #064e3b; }
         .badge-cancelado { background: #f87171; color: #450a0a; }
         .loading { display: none; text-align: center; padding: 20px; }
-
-        /* Modal */
+        .toast {
+            position: fixed; bottom: 24px; right: 24px;
+            background: var(--success); color: white;
+            padding: 12px 24px; border-radius: 12px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+            font-weight: 600; z-index: 2000;
+            animation: slideUp 0.3s ease;
+            display: none;
+        }
+        @keyframes slideUp {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
         .modal-overlay {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             background: rgba(0,0,0,0.7); backdrop-filter: blur(8px);
@@ -184,23 +208,49 @@
         .modal h3 { margin-bottom: 16px; }
         .modal .item-list { max-height: 400px; overflow-y: auto; margin: 16px 0; }
         .modal .item-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--border); }
-        @media (max-width: 600px) {
-            .header h1 { font-size: 1.6rem; }
-        }
     </style>
 </head>
 <body>
-<div class="container">
+
+<!-- TELA DE LOGIN -->
+<div class="login-container" id="loginScreen">
     <div class="header">
         <h1>🛵 RotaPay Scanner</h1>
-        <p>Escaneie a comanda do iFood – cálculo automático por bairro</p>
+        <p>Faça login para continuar</p>
+    </div>
+    <div class="card">
+        <div class="form-group" style="margin-bottom:16px;">
+            <label>Usuário</label>
+            <select id="userSelect">
+                <option value="">-- Selecione --</option>
+            </select>
+        </div>
+        <div class="form-group" style="margin-bottom:16px;">
+            <label>Senha (obrigatória para Admin)</label>
+            <input type="password" id="passwordInput" placeholder="Digite a senha se necessário">
+        </div>
+        <button class="btn btn-primary" id="loginBtn" style="width:100%;">Entrar</button>
+    </div>
+</div>
+
+<!-- APLICATIVO PRINCIPAL -->
+<div class="app-container" id="appScreen">
+    <div class="header">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+            <div>
+                <h1>🛵 RotaPay Scanner</h1>
+                <p id="userGreeting" style="margin:0;"></p>
+            </div>
+            <button class="btn btn-outline btn-sm" id="logoutBtn">Trocar Usuário</button>
+        </div>
         <div class="tax-badge">
             <span>💎 R$7</span><span>🔥 R$9</span><span>⚡ R$13</span><span>🏍️ R$15</span>
         </div>
     </div>
 
-    <div style="display: flex; gap: 12px; justify-content: flex-end;">
-        <button class="btn btn-outline" id="manageItemsBtn">🥤 Itens (descontos)</button>
+    <div style="display: flex; gap: 12px; justify-content: flex-end; flex-wrap:wrap;">
+        <button class="btn btn-outline btn-sm" id="manageItemsBtn">🥤 Itens (descontos)</button>
+        <button class="btn btn-outline btn-sm" id="adminBtn" style="display:none;">👑 Admin</button>
     </div>
 
     <div class="card upload-area" id="dropArea">
@@ -212,18 +262,18 @@
 
     <div style="text-align: center;">
         <button class="btn btn-primary" id="scanBtn" disabled>🔍 Escanear Comanda</button>
-        <div class="loading" id="loadingMessage">⏳ Processando imagem com IA...</div>
+        <div class="loading" id="loadingMessage">⏳ Processando imagem com Google Vision...</div>
     </div>
 
     <div class="card" id="resultCard" style="display: none;">
         <h3 style="margin-bottom:16px;">📋 Dados extraídos</h3>
         <div class="form-row">
-            <div class="form-group"><label>Código</label><input type="text" id="codigo"></div>
-            <div class="form-group"><label>Bairro</label><input type="text" id="bairro"></div>
+            <div class="form-group"><label>Código do Pedido</label><input type="text" id="codigo" placeholder="Ex: 5473"></div>
+            <div class="form-group"><label>Bairro</label><input type="text" id="bairro" placeholder="Nome do bairro"></div>
             <div class="form-group"><label>Taxa Bruta (R$)</label><input type="text" id="taxaBruta" readonly></div>
         </div>
         <div class="form-row">
-            <div class="form-group"><label>Valor do Pedido</label><input type="text" id="valorPedido"></div>
+            <div class="form-group"><label>Valor do Pedido</label><input type="text" id="valorPedido" placeholder="R$ 66,90"></div>
             <div class="form-group"><label>Pagamento</label>
                 <select id="tipoPagamento">
                     <option value="Online">Online (já pago)</option>
@@ -241,17 +291,15 @@
             </div>
         </div>
 
-        <!-- Seção de descontos com checkboxes + itens avulsos -->
         <div class="desconto-section">
-            <h4 style="margin-bottom: 8px; color: #ffb347;">🧾 Itens consumidos (marcar os que pegou)</h4>
-            <div id="itensCheckboxContainer">
-                <!-- Checkboxes gerados dinamicamente -->
-            </div>
+            <h4 style="margin-bottom: 8px; color: #ffb347;">🧾 Itens consumidos (marque os que pegou)</h4>
+            <div id="itensCheckboxContainer"></div>
             <div class="item-avulso">
                 <input type="text" id="avulsoDesc" placeholder="Item extra (ex: espeto)">
                 <input type="number" id="avulsoValor" step="0.01" placeholder="R$">
                 <button class="btn btn-sm btn-outline" id="addAvulsoBtn">+</button>
             </div>
+            <div id="avulsosListContainer"></div>
             <div style="margin-top: 10px; display: flex; justify-content: space-between;">
                 <span>Total descontos: <strong id="totalDescontos">R$ 0,00</strong></span>
                 <span>Taxa Líquida: <strong id="taxaLiquida" style="color:#10b981;">R$ 0,00</strong></span>
@@ -267,7 +315,7 @@
 
     <div class="card summary" id="summary">
         <span>📦 Entregas válidas: <strong id="totalEntregas">0</strong></span>
-        <span>💵 Total líquido a receber: <strong id="totalTaxas">R$ 0,00</strong></span>
+        <span>💵 Meu líquido a receber: <strong id="totalTaxas">R$ 0,00</strong></span>
     </div>
 
     <div class="card table-wrapper">
@@ -283,9 +331,10 @@
         <p id="emptyMessage" style="text-align:center; color:#666; padding:20px;">Nenhum pedido registrado.</p>
     </div>
     <button class="btn btn-outline" id="exportBtn">📥 Exportar CSV</button>
+    <div class="toast" id="toast">✅ Pedido adicionado com sucesso!</div>
 </div>
 
-<!-- Modal de gerenciamento de itens -->
+<!-- MODAL ITENS -->
 <div class="modal-overlay" id="itemsModal">
     <div class="modal">
         <h3>🥤 Gerenciar itens para desconto</h3>
@@ -295,13 +344,33 @@
             <button class="btn btn-primary btn-sm" id="addItemBtn" style="align-self: flex-end;">Adicionar</button>
         </div>
         <div class="item-list" id="savedItemsList"></div>
-        <button class="btn btn-outline" id="closeModalBtn" style="width:100%; margin-top:12px;">Fechar</button>
+        <button class="btn btn-outline" id="closeItemsModalBtn" style="width:100%; margin-top:12px;">Fechar</button>
+    </div>
+</div>
+
+<!-- MODAL ADMIN -->
+<div class="modal-overlay" id="adminModal">
+    <div class="modal">
+        <h3>👑 Administração de Motoboys</h3>
+        <div class="form-row" style="grid-template-columns: 1fr 1fr auto;">
+            <div class="form-group"><label>Nome</label><input type="text" id="newUserName" placeholder="Nome do motoboy"></div>
+            <div class="form-group"><label>Senha (opcional)</label><input type="password" id="newUserPass"></div>
+            <button class="btn btn-primary btn-sm" id="addUserBtn" style="align-self: flex-end;">Adicionar</button>
+        </div>
+        <div class="item-list" id="usersList"></div>
+        <button class="btn btn-outline" id="closeAdminModalBtn" style="width:100%; margin-top:12px;">Fechar</button>
     </div>
 </div>
 
 <script>
     (() => {
-        // ========== BAIRROS ==========
+        // ========== CONFIGURAÇÃO ==========
+        const API_KEY = 'AIzaSyC1iWR-2psc6698TGM2F5s8Xa2dDgi8jKo'; // ⚠️ Cole sua chave de API do Google Cloud Vision
+        const USERS_KEY = 'rotapay_users';
+        const ITENS_KEY = 'rotapay_itens';
+        const REG_PREFIX = 'rotapay_pedidos_';
+
+        // Mapa de bairros
         const BAIRROS_MAP = new Map([
             ['monte serrat',15],['uruguai',15],['caminho de areia',15],['boa viagem',15],
             ['nova brasilia',15],['nova brasília',15],['ribeira',15],['vila rui barbosa',15],
@@ -335,15 +404,188 @@
             ['amaralina',7]
         ]);
 
-        // ========== ITENS DE DESCONTO (nova aba) ==========
-        const ITENS_KEY = 'rotapay_itens';
-        let itensDesconto = JSON.parse(localStorage.getItem(ITENS_KEY) || '[]'); // [{desc, valor}]
+        // ========== INICIALIZA USUÁRIOS PADRÃO ==========
+        let users = JSON.parse(localStorage.getItem(USERS_KEY) || '[]');
+        if (users.length === 0) {
+            users = [
+                { nome: 'Lucas Jesus', senha: '' },
+                { nome: 'Bispo', senha: '' },
+                { nome: 'Admin', senha: 'caio3110', isAdmin: true }
+            ];
+            localStorage.setItem(USERS_KEY, JSON.stringify(users));
+        }
 
-        // ========== REGISTROS ==========
-        const REG_KEY = 'rotapay_pedidos';
-        let registros = JSON.parse(localStorage.getItem(REG_KEY) || '[]');
+        let currentUser = null;
 
-        // Elementos DOM principais
+        // Elementos de tela
+        const loginScreen = document.getElementById('loginScreen');
+        const appScreen = document.getElementById('appScreen');
+        const userSelect = document.getElementById('userSelect');
+        const passwordInput = document.getElementById('passwordInput');
+        const loginBtn = document.getElementById('loginBtn');
+        const userGreeting = document.getElementById('userGreeting');
+        const logoutBtn = document.getElementById('logoutBtn');
+        const adminBtn = document.getElementById('adminBtn');
+
+        function populateUserSelect() {
+            userSelect.innerHTML = '<option value="">-- Selecione --</option>';
+            users.forEach(u => {
+                const option = document.createElement('option');
+                option.value = u.nome;
+                option.textContent = u.nome + (u.isAdmin ? ' (Admin)' : '');
+                userSelect.appendChild(option);
+            });
+        }
+        populateUserSelect();
+
+        // LOGIN
+        loginBtn.addEventListener('click', () => {
+            const nome = userSelect.value;
+            if (!nome) return alert('Selecione um usuário.');
+            const user = users.find(u => u.nome === nome);
+            if (!user) return alert('Usuário não encontrado.');
+            if (user.senha && user.senha !== passwordInput.value) {
+                return alert('Senha incorreta.');
+            }
+            currentUser = user;
+            startApp();
+        });
+
+        function startApp() {
+            loginScreen.style.display = 'none';
+            appScreen.style.display = 'flex';
+            userGreeting.textContent = `Olá, ${currentUser.nome}${currentUser.isAdmin ? ' (Admin)' : ''}`;
+            if (currentUser.isAdmin) adminBtn.style.display = 'inline-flex';
+            else adminBtn.style.display = 'none';
+            loadUserData();
+        }
+
+        function logout() {
+            currentUser = null;
+            appScreen.style.display = 'none';
+            loginScreen.style.display = 'flex';
+            passwordInput.value = '';
+            userSelect.value = '';
+            resetAppUI();
+        }
+
+        logoutBtn.addEventListener('click', logout);
+
+        // ========== ADMIN MODAL ==========
+        const adminModal = document.getElementById('adminModal');
+        const newUserName = document.getElementById('newUserName');
+        const newUserPass = document.getElementById('newUserPass');
+        const addUserBtn = document.getElementById('addUserBtn');
+        const usersList = document.getElementById('usersList');
+        const closeAdminModalBtn = document.getElementById('closeAdminModalBtn');
+
+        adminBtn.addEventListener('click', () => {
+            renderUsersList();
+            adminModal.style.display = 'flex';
+        });
+        closeAdminModalBtn.onclick = () => adminModal.style.display = 'none';
+        window.onclick = (e) => { if (e.target === adminModal) adminModal.style.display = 'none'; };
+
+        function renderUsersList() {
+            usersList.innerHTML = '';
+            users.forEach((u, idx) => {
+                if (u.isAdmin && u.nome === 'Admin') return;
+                const div = document.createElement('div');
+                div.className = 'item-row';
+                div.innerHTML = `<span>${esc(u.nome)} ${u.isAdmin ? '(Admin)' : ''}</span>
+                    <button class="btn btn-sm btn-outline" data-deluser="${idx}" style="color:#f87171;">✕</button>`;
+                usersList.appendChild(div);
+            });
+            document.querySelectorAll('[data-deluser]').forEach(btn => {
+                btn.onclick = (e) => {
+                    const idx = parseInt(e.target.dataset.deluser);
+                    if (confirm(`Remover ${users[idx].nome}?`)) {
+                        users.splice(idx, 1);
+                        localStorage.setItem(USERS_KEY, JSON.stringify(users));
+                        populateUserSelect();
+                        renderUsersList();
+                    }
+                };
+            });
+        }
+
+        addUserBtn.onclick = () => {
+            const nome = newUserName.value.trim();
+            if (!nome) return alert('Digite um nome.');
+            if (users.some(u => u.nome === nome)) return alert('Usuário já existe.');
+            users.push({ nome, senha: newUserPass.value });
+            localStorage.setItem(USERS_KEY, JSON.stringify(users));
+            newUserName.value = '';
+            newUserPass.value = '';
+            populateUserSelect();
+            renderUsersList();
+        };
+
+        // ========== DADOS DO USUÁRIO ==========
+        let registros = [];
+        let itensDesconto = JSON.parse(localStorage.getItem(ITENS_KEY) || '[]');
+
+        function loadUserData() {
+            const key = REG_PREFIX + currentUser.nome;
+            registros = JSON.parse(localStorage.getItem(key) || '[]');
+            renderTabela();
+            renderizarCheckboxes();
+            resetScanForm();
+        }
+
+        function saveUserData() {
+            const key = REG_PREFIX + currentUser.nome;
+            localStorage.setItem(key, JSON.stringify(registros));
+        }
+
+        // ========== ITENS MODAL ==========
+        const itemsModal = document.getElementById('itemsModal');
+        const manageItemsBtn = document.getElementById('manageItemsBtn');
+        const closeItemsModalBtn = document.getElementById('closeItemsModalBtn');
+        const newItemDesc = document.getElementById('newItemDesc');
+        const newItemValor = document.getElementById('newItemValor');
+        const addItemBtn = document.getElementById('addItemBtn');
+        const savedItemsList = document.getElementById('savedItemsList');
+
+        function salvarItens() { localStorage.setItem(ITENS_KEY, JSON.stringify(itensDesconto)); }
+        function renderizarItensModal() {
+            savedItemsList.innerHTML = '';
+            if (!itensDesconto.length) {
+                savedItemsList.innerHTML = '<p style="color:#666;">Nenhum item cadastrado.</p>';
+                return;
+            }
+            itensDesconto.forEach((item, index) => {
+                const div = document.createElement('div');
+                div.className = 'item-row';
+                div.innerHTML = `<span>${esc(item.desc)} - R$ ${parseFloat(item.valor).toFixed(2)}</span>
+                    <button class="btn btn-sm btn-outline" data-remove="${index}" style="color:#f87171;">✕</button>`;
+                savedItemsList.appendChild(div);
+            });
+            document.querySelectorAll('[data-remove]').forEach(btn => {
+                btn.onclick = (e) => {
+                    itensDesconto.splice(parseInt(e.target.dataset.remove), 1);
+                    salvarItens();
+                    renderizarItensModal();
+                };
+            });
+        }
+
+        addItemBtn.onclick = () => {
+            const desc = newItemDesc.value.trim();
+            const valor = parseFloat(newItemValor.value);
+            if (!desc || isNaN(valor) || valor <= 0) return alert('Preencha descrição e valor válido.');
+            itensDesconto.push({ desc, valor });
+            salvarItens();
+            newItemDesc.value = '';
+            newItemValor.value = '';
+            renderizarItensModal();
+        };
+
+        manageItemsBtn.onclick = () => { itemsModal.style.display = 'flex'; renderizarItensModal(); };
+        closeItemsModalBtn.onclick = () => itemsModal.style.display = 'none';
+        window.onclick = (e) => { if (e.target === itemsModal) itemsModal.style.display = 'none'; };
+
+        // ========== ELEMENTOS DA APLICAÇÃO ==========
         const dropArea = document.getElementById('dropArea');
         const fileInput = document.getElementById('fileInput');
         const preview = document.getElementById('previewImage');
@@ -372,108 +614,73 @@
         const addAvulsoBtn = document.getElementById('addAvulsoBtn');
         const totalDescontosEl = document.getElementById('totalDescontos');
         const taxaLiquidaEl = document.getElementById('taxaLiquida');
-
-        // Modal de itens
-        const manageItemsBtn = document.getElementById('manageItemsBtn');
-        const itemsModal = document.getElementById('itemsModal');
-        const closeModalBtn = document.getElementById('closeModalBtn');
-        const newItemDesc = document.getElementById('newItemDesc');
-        const newItemValor = document.getElementById('newItemValor');
-        const addItemBtn = document.getElementById('addItemBtn');
-        const savedItemsList = document.getElementById('savedItemsList');
+        const toast = document.getElementById('toast');
 
         let selectedFile = null;
-        // Itens selecionados por checkboxes (array de índices) + avulsos
-        let selectedItens = new Set(); // índices dos itens cadastrados
-        let avulsos = []; // {desc, valor}
+        let selectedItens = new Set();
+        let avulsos = [];
 
-        // ========== FUNÇÕES DE ITENS ==========
-        function salvarItens() {
-            localStorage.setItem(ITENS_KEY, JSON.stringify(itensDesconto));
+        function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+        function resetScanForm() {
+            codigoInp.value = '';
+            bairroInp.value = '';
+            taxaBrutaInp.value = '';
+            valorPedidoInp.value = '';
+            tipoPgtoSel.value = 'Online';
+            statusSel.value = 'Pendente';
+            selectedItens.clear();
+            avulsos = [];
+            renderizarCheckboxes();
+            renderizarAvulsos();
+            trocoDiv.style.display = 'none';
+            valorRecebidoInp.value = '';
+            resultCard.style.display = 'none';
+            preview.style.display = 'none';
+            uploadText.style.display = 'block';
+            fileInput.value = '';
+            selectedFile = null;
+            scanBtn.disabled = true;
+            totalDescontosEl.textContent = 'R$ 0,00';
+            taxaLiquidaEl.textContent = 'R$ 0,00';
         }
 
-        function renderizarItensModal() {
-            savedItemsList.innerHTML = '';
-            if (itensDesconto.length === 0) {
-                savedItemsList.innerHTML = '<p style="color:#666;">Nenhum item cadastrado.</p>';
+        function resetAppUI() {
+            tableBody.innerHTML = '';
+            emptyMsg.style.display = 'block';
+            totalEntregasEl.textContent = '0';
+            totalTaxasEl.textContent = 'R$ 0,00';
+            resetScanForm();
+        }
+
+        // ========== CHECKBOXES ==========
+        function renderizarCheckboxes() {
+            itensCheckboxContainer.innerHTML = '';
+            if (!itensDesconto.length) {
+                itensCheckboxContainer.innerHTML = '<p style="color:#666;">Nenhum item cadastrado. Use "🥤 Itens" para cadastrar.</p>';
+                atualizarResumoDescontos();
                 return;
             }
             itensDesconto.forEach((item, index) => {
                 const div = document.createElement('div');
-                div.className = 'item-row';
-                div.innerHTML = `
-                    <span>${esc(item.desc)} - R$ ${parseFloat(item.valor).toFixed(2)}</span>
-                    <button class="btn btn-sm btn-outline" data-remove="${index}" style="color:#f87171;">✕</button>
-                `;
-                savedItemsList.appendChild(div);
+                div.className = 'item-checkbox';
+                div.innerHTML = `<input type="checkbox" id="item_${index}" value="${index}" ${selectedItens.has(index) ? 'checked' : ''}>
+                    <label for="item_${index}">${esc(item.desc)} (R$ ${parseFloat(item.valor).toFixed(2)})</label>`;
+                itensCheckboxContainer.appendChild(div);
             });
-            document.querySelectorAll('[data-remove]').forEach(btn => {
-                btn.onclick = (e) => {
-                    itensDesconto.splice(parseInt(e.target.dataset.remove), 1);
-                    salvarItens();
-                    renderizarItensModal();
+            document.querySelectorAll('#itensCheckboxContainer input[type=checkbox]').forEach(cb => {
+                cb.onchange = () => {
+                    const idx = parseInt(cb.value);
+                    cb.checked ? selectedItens.add(idx) : selectedItens.delete(idx);
+                    atualizarResumoDescontos();
                 };
             });
-        }
-
-        addItemBtn.onclick = () => {
-            const desc = newItemDesc.value.trim();
-            const valor = parseFloat(newItemValor.value);
-            if (!desc || isNaN(valor) || valor <= 0) {
-                alert('Preencha descrição e valor válido.');
-                return;
-            }
-            itensDesconto.push({ desc, valor });
-            salvarItens();
-            newItemDesc.value = '';
-            newItemValor.value = '';
-            renderizarItensModal();
-        };
-
-        manageItemsBtn.onclick = () => {
-            itemsModal.style.display = 'flex';
-            renderizarItensModal();
-        };
-        closeModalBtn.onclick = () => itemsModal.style.display = 'none';
-        window.onclick = (e) => {
-            if (e.target === itemsModal) itemsModal.style.display = 'none';
-        };
-
-        // ========== RENDERIZAR CHECKBOXES NA TELA DE RESULTADO ==========
-        function renderizarCheckboxes() {
-            itensCheckboxContainer.innerHTML = '';
-            if (itensDesconto.length === 0) {
-                itensCheckboxContainer.innerHTML = '<p style="color:#666;">Nenhum item cadastrado. Use "Itens (descontos)" para cadastrar.</p>';
-            } else {
-                itensDesconto.forEach((item, index) => {
-                    const div = document.createElement('div');
-                    div.className = 'item-checkbox';
-                    div.innerHTML = `
-                        <input type="checkbox" id="item_${index}" value="${index}" ${selectedItens.has(index) ? 'checked' : ''}>
-                        <label for="item_${index}">${esc(item.desc)} (R$ ${parseFloat(item.valor).toFixed(2)})</label>
-                    `;
-                    itensCheckboxContainer.appendChild(div);
-                });
-                // Eventos
-                document.querySelectorAll('#itensCheckboxContainer input[type=checkbox]').forEach(cb => {
-                    cb.onchange = () => {
-                        const idx = parseInt(cb.value);
-                        if (cb.checked) selectedItens.add(idx);
-                        else selectedItens.delete(idx);
-                        atualizarResumoDescontos();
-                    };
-                });
-            }
             atualizarResumoDescontos();
         }
 
         function atualizarResumoDescontos() {
             let total = 0;
-            // soma itens selecionados
-            selectedItens.forEach(idx => {
-                total += parseFloat(itensDesconto[idx].valor) || 0;
-            });
-            // soma avulsos
+            selectedItens.forEach(idx => total += parseFloat(itensDesconto[idx].valor) || 0);
             avulsos.forEach(a => total += parseFloat(a.valor) || 0);
             totalDescontosEl.textContent = `R$ ${total.toFixed(2).replace('.', ',')}`;
             const taxaBruta = parseFloat(taxaBrutaInp.value.replace(/[^\d,]/g, '').replace(',', '.')) || 0;
@@ -481,50 +688,122 @@
             taxaLiquidaEl.textContent = `R$ ${liquida.toFixed(2).replace('.', ',')}`;
         }
 
+        function renderizarAvulsos() {
+            const container = document.getElementById('avulsosListContainer');
+            container.innerHTML = '';
+            if (!avulsos.length) return;
+            const ul = document.createElement('ul');
+            ul.style.listStyle = 'none';
+            ul.style.marginTop = '8px';
+            avulsos.forEach((a, i) => {
+                const li = document.createElement('li');
+                li.style.display = 'flex';
+                li.style.justifyContent = 'space-between';
+                li.style.marginBottom = '4px';
+                li.innerHTML = `<span>${esc(a.desc)} - R$ ${parseFloat(a.valor).toFixed(2)}</span>
+                    <button class="btn btn-sm btn-outline" data-rem-av="${i}" style="color:#f87171;">✕</button>`;
+                ul.appendChild(li);
+            });
+            container.appendChild(ul);
+            container.querySelectorAll('[data-rem-av]').forEach(btn => {
+                btn.onclick = (e) => {
+                    avulsos.splice(parseInt(e.target.dataset.remAv), 1);
+                    renderizarAvulsos();
+                    atualizarResumoDescontos();
+                };
+            });
+        }
+
         addAvulsoBtn.onclick = () => {
             const desc = avulsoDesc.value.trim();
             const valor = parseFloat(avulsoValor.value);
             if (!desc || isNaN(valor) || valor <= 0) return alert('Preencha item e valor.');
-            avulsos.push({ desc, valor });
+            avulsos.push({ desc, valor: parseFloat(valor.toFixed(2)) });
             avulsoDesc.value = '';
             avulsoValor.value = '';
-            atualizarResumoDescontos();
-            // Mostrar avulsos adicionados? Pode ser exibido embaixo.
-            // Re-renderizar lista de avulsos para remoção
             renderizarAvulsos();
+            atualizarResumoDescontos();
         };
 
-        function renderizarAvulsos() {
-            // Remove lista anterior de avulsos se existir
-            const old = document.getElementById('avulsosList');
-            if (old) old.remove();
-            if (avulsos.length > 0) {
-                const ul = document.createElement('ul');
-                ul.id = 'avulsosList';
-                ul.style.listStyle = 'none';
-                ul.style.marginTop = '8px';
-                avulsos.forEach((a, i) => {
-                    const li = document.createElement('li');
-                    li.style.display = 'flex';
-                    li.style.justifyContent = 'space-between';
-                    li.innerHTML = `<span>${esc(a.desc)} - R$ ${parseFloat(a.valor).toFixed(2)}</span> <button class="btn btn-sm btn-outline" data-rem-av="${i}" style="color:#f87171;">✕</button>`;
-                    ul.appendChild(li);
-                });
-                itensCheckboxContainer.parentNode.insertBefore(ul, document.getElementById('totalDescontos').parentNode);
-                document.querySelectorAll('[data-rem-av]').forEach(btn => {
-                    btn.onclick = (e) => {
-                        avulsos.splice(parseInt(e.target.dataset.remAv), 1);
-                        renderizarAvulsos();
-                        atualizarResumoDescontos();
-                    };
-                });
-            }
+        // ========== PRÉ-PROCESSAMENTO DA IMAGEM ==========
+        function preprocessImage(file) {
+            return new Promise((resolve, reject) => {
+                const img = new Image();
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    const ctx = canvas.getContext('2d');
+                    // Redimensiona para 2x a largura original (mínimo 800px) mantendo proporção
+                    const scale = Math.max(1, 800 / img.width);
+                    canvas.width = img.width * scale;
+                    canvas.height = img.height * scale;
+                    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                    // Aplica binarização simples (threshold adaptativo)
+                    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                    const pixels = imageData.data;
+                    for (let i = 0; i < pixels.length; i += 4) {
+                        const gray = pixels[i] * 0.299 + pixels[i + 1] * 0.587 + pixels[i + 2] * 0.114;
+                        const val = gray > 110 ? 255 : 0; // threshold fixo (funciona bem para impressão)
+                        pixels[i] = pixels[i + 1] = pixels[i + 2] = val;
+                    }
+                    ctx.putImageData(imageData, 0, 0);
+                    resolve(canvas.toDataURL('image/jpeg', 0.9).split(',')[1]); // base64 sem prefixo
+                };
+                img.onerror = reject;
+                img.src = URL.createObjectURL(file);
+            });
         }
 
-        // ========== UPLOAD E OCR ==========
+        // ========== CHAMADA À API GOOGLE CLOUD VISION ==========
+        async function ocrGoogleVision(base64) {
+            const response = await fetch(`https://vision.googleapis.com/v1/images:annotate?key=${API_KEY}`, {
+                method: 'POST',
+                body: JSON.stringify({
+                    requests: [{
+                        image: { content: base64 },
+                        features: [{ type: 'TEXT_DETECTION' }]
+                    }]
+                }),
+                headers: { 'Content-Type': 'application/json' }
+            });
+            if (!response.ok) {
+                const err = await response.json();
+                throw new Error(err.error?.message || 'Erro na API Google Vision');
+            }
+            const data = await response.json();
+            const fullText = data.responses[0]?.fullTextAnnotation?.text || '';
+            return fullText;
+        }
+
+        function extrairCodigoInteligente(texto) {
+            const linhas = texto.split(/\r?\n/).map(l => l.trim());
+            let codigo = '';
+
+            for (let i = 0; i < linhas.length; i++) {
+                if (/EXPEDICAO|Entrega\s+Propria/i.test(linhas[i])) {
+                    for (let j = i + 1; j < Math.min(i + 6, linhas.length); j++) {
+                        const possivel = linhas[j].replace(/\s/g, '');
+                        if (/^\d{3,5}$/.test(possivel) && !/\b(?:2026|2025|data|cep|localizador|id|tel)\b/i.test(linhas[j])) {
+                            return possivel;
+                        }
+                    }
+                }
+            }
+
+            for (const linha of linhas) {
+                const limpo = linha.replace(/\s/g, '');
+                if (/^\d{4}$/.test(limpo) && !/\b(2026|2025|data|cep|localizador|id|tel|pedidos|itens|total)/i.test(linha)) {
+                    return limpo;
+                }
+            }
+
+            const matchPedido = texto.match(/(?:pedido|código|codigo)\s*[:\s]*(\d{3,})/i);
+            return matchPedido ? matchPedido[1] : '';
+        }
+
+        // ========== UPLOAD E OCR COM GOOGLE VISION ==========
         bairroInp.addEventListener('input', () => {
             const bairro = bairroInp.value.trim().toLowerCase();
-            const taxa = BAIRROS_MAP.get(bairro) || null;
+            const taxa = BAIRROS_MAP.get(bairro);
             taxaBrutaInp.value = taxa ? `R$ ${taxa.toFixed(2).replace('.',',')}` : (bairro ? '❌ não encontrado' : '');
             atualizarResumoDescontos();
         });
@@ -571,18 +850,20 @@
             loadingDiv.style.display = 'block';
             resultCard.style.display = 'none';
             try {
-                const { data: { text } } = await Tesseract.recognize(selectedFile, 'por');
-                console.log('OCR:', text);
-                let codigo = '';
-                const codMatch = text.match(/(?:EXPEDICAO|Entrega Propria)\s*\n+\s*(\d{3,5})/i) || text.match(/^(\d{4})\s*$/m) || text.match(/(?:pedido|código)\s*[:\s]*(\d{3,})/i);
-                if (codMatch) codigo = codMatch[1];
+                const base64 = await preprocessImage(selectedFile);
+                const text = await ocrGoogleVision(base64);
+                console.log('Texto Google Vision:', text);
+                if (!text.trim()) throw new Error('Nenhum texto encontrado.');
+
+                const codigo = extrairCodigoInteligente(text);
 
                 let bairro = '';
                 const bairroMatch = text.match(/bairro\s*[:\s]\s*([^\n]{3,40})/i);
                 if (bairroMatch) bairro = bairroMatch[1].replace(/[;:]/g, '').trim();
 
                 let valor = '';
-                const valMatch = text.match(/(?:total do pedido|valor total)\s*[:\s]*R?\$?\s*(\d+[.,]\d{2})/i) || text.match(/R\$\s*(\d+[.,]\d{2})/);
+                const valMatch = text.match(/(?:total do pedido|valor total)\s*[:\s]*R?\$?\s*(\d+[.,]\d{2})/i) ||
+                                text.match(/R\$\s*(\d+[.,]\d{2})/);
                 if (valMatch) valor = 'R$ ' + valMatch[1].replace('.', ',');
 
                 const pagMatch = text.match(/(?:pagamento realizado|pagamento)\s*[:\s]*(online\s*-\s*(?:credito|debito|mastercard|visa|elo|pix|dinheiro))/i);
@@ -600,7 +881,6 @@
                 tipoPgtoSel.value = pagamento;
                 statusSel.value = 'Pendente';
 
-                // Resetar seleções
                 selectedItens.clear();
                 avulsos = [];
                 renderizarCheckboxes();
@@ -608,53 +888,53 @@
                 bairroInp.dispatchEvent(new Event('input'));
                 tipoPgtoSel.dispatchEvent(new Event('change'));
                 resultCard.style.display = 'block';
-            } catch (e) { alert('Erro no OCR: ' + e.message); }
-            finally {
+            } catch (error) {
+                console.error('Erro OCR:', error);
+                alert('Erro ao processar imagem: ' + error.message);
+            } finally {
                 scanBtn.disabled = false;
                 loadingDiv.style.display = 'none';
             }
         });
 
+        // ========== ADICIONAR REGISTRO ==========
         addBtn.addEventListener('click', () => {
+            if (!currentUser) return;
             const taxaBruta = parseFloat(taxaBrutaInp.value.replace(/[^\d,]/g,'').replace(',','.')) || 0;
             let totalDesc = 0;
-            const descontosDetalhe = []; // para armazenar no registro
+            const descontosDetalhe = [];
             selectedItens.forEach(idx => {
                 const item = itensDesconto[idx];
-                totalDesc += parseFloat(item.valor);
-                descontosDetalhe.push({ desc: item.desc, valor: parseFloat(item.valor) });
+                totalDesc += parseFloat(item.valor) || 0;
+                descontosDetalhe.push({ desc: item.desc, valor: parseFloat(item.valor) || 0 });
             });
             avulsos.forEach(a => {
-                totalDesc += parseFloat(a.valor);
+                totalDesc += parseFloat(a.valor) || 0;
                 descontosDetalhe.push(a);
             });
             const taxaLiquida = Math.max(0, taxaBruta - totalDesc);
 
-            const registro = {
+            registros.push({
                 codigo: codigoInp.value.trim() || '-',
                 bairro: bairroInp.value.trim() || '-',
                 taxaBruta,
                 descontos: descontosDetalhe,
                 taxaLiquida,
-                valorPedido: valorPedidoInp.value.trim(),
+                valorPedido: valorPedidoInp.value.trim() || '-',
                 pagamento: tipoPgtoSel.value,
                 status: statusSel.value,
-            };
-            registros.push(registro);
-            localStorage.setItem(REG_KEY, JSON.stringify(registros));
+                usuario: currentUser.nome,
+            });
+            saveUserData();
             renderTabela();
-            // Reset
-            codigoInp.value = ''; bairroInp.value = ''; taxaBrutaInp.value = ''; valorPedidoInp.value = '';
-            tipoPgtoSel.value = 'Online'; statusSel.value = 'Pendente';
-            selectedItens.clear(); avulsos = [];
-            renderizarCheckboxes();
-            renderizarAvulsos();
-            trocoDiv.style.display = 'none'; valorRecebidoInp.value = '';
-            resultCard.style.display = 'none';
-            preview.style.display = 'none'; uploadText.style.display = 'block';
-            fileInput.value = ''; selectedFile = null; scanBtn.disabled = true;
+
+            toast.style.display = 'block';
+            setTimeout(() => toast.style.display = 'none', 2500);
+
+            resetScanForm();
         });
 
+        // ========== TABELA ==========
         function renderTabela() {
             tableBody.innerHTML = '';
             emptyMsg.style.display = registros.length ? 'none' : 'block';
@@ -681,29 +961,30 @@
             });
             totalEntregasEl.textContent = validas;
             totalTaxasEl.textContent = `R$ ${totalLiquido.toFixed(2).replace('.',',')}`;
+
             document.querySelectorAll('.status-inline').forEach(s => s.onchange = function() {
                 registros[this.dataset.i].status = this.value;
-                localStorage.setItem(REG_KEY, JSON.stringify(registros));
+                saveUserData();
                 renderTabela();
             });
             document.querySelectorAll('[data-del]').forEach(b => b.onclick = () => {
-                if (confirm('Excluir?')) { registros.splice(b.dataset.del,1); localStorage.setItem(REG_KEY, JSON.stringify(registros)); renderTabela(); }
+                if (confirm('Excluir?')) {
+                    registros.splice(b.dataset.del,1);
+                    saveUserData();
+                    renderTabela();
+                }
             });
         }
 
-        function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+        // CSV
         exportBtn.onclick = () => {
             if (!registros.length) return alert('Nada para exportar.');
             const csv = 'Código,Bairro,Taxa Bruta,Descontos,Taxa Líquida,Valor Pedido,Pagamento,Status\n' +
                 registros.map(r => `"${r.codigo}","${r.bairro}","${r.taxaBruta}","${r.descontos.map(d=>d.desc+':'+d.valor).join(' ')}","${r.taxaLiquida}","${r.valorPedido}","${r.pagamento}","${r.status}"`).join('\n');
             const blob = new Blob([csv], {type: 'text/csv'});
-            const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'rotas.csv'; a.click();
+            const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `rotas_${currentUser.nome}.csv`; a.click();
         };
 
-        // Inicializações
-        renderTabela();
-        // Pré-renderiza checkboxes vazio (ao abrir resultado serão preenchidos)
-        renderizarCheckboxes();
     })();
 </script>
 </body>
